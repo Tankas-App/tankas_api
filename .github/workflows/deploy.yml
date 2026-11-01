@@ -1,0 +1,44 @@
+name: Deploy to Azure VM
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two deploys at once; the second waits for the first.
+concurrency:
+  group: deploy-vm
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "${{ secrets.VM_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Pull and rebuild on the VM
+        run: |
+          ssh -i ~/.ssh/deploy_key -o ConnectTimeout=20 hydra@${{ secrets.VM_HOST }} '
+            set -e
+            cd ~/tankas
+            git fetch --quiet origin
+            git checkout --quiet main
+            git reset --hard --quiet origin/main
+            docker compose up -d --build api
+            docker image prune -f
+          '
+
+      - name: Check the API answers
+        run: |
+          for i in $(seq 1 20); do
+            curl -fsS -o /dev/null https://api.tankas.me/docs && echo "API is up" && exit 0
+            sleep 6
+          done
+          echo "API did not answer after 2 minutes"
+          exit 1
