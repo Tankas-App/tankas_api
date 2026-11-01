@@ -24,9 +24,12 @@ COPY requirements.txt .
 # roughly 200MB. There is no GPU on Railway, so the CUDA payload is dead weight
 # that slows builds and inflates memory. Doing it here means the torch==2.2.2
 # pin in requirements.txt is already satisfied on the next step.
+# torchvision must come from the same index: the PyPI wheel is built against
+# the CUDA torch, and with the CPU torch its ops fail to load
+# ("operator torchvision::nms does not exist").
 RUN pip install --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cpu \
-    torch==2.2.2
+    torch==2.2.2 torchvision==0.17.2
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
